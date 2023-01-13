@@ -17,7 +17,7 @@
  *	Ax:		I2C address pins
  *	Vss:	gnd
  *	Vcc:	2v5 - 5v5
- *	WP:		write protect (R/nW)
+ *	WP:		write protect (enabled when HIGH)
  *	SCL:	serial clock
  *	SDA:	serial data
  *
