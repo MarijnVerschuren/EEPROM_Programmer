@@ -16,7 +16,14 @@ void setup() {
 
 void loop() {
 	delay(500);
-	auto err = read(rom, 0xff00, data_in, 4);
+    auto err = write(rom, 0xff00, data, 4);
+    if ((uint8_t)err) {
+        Serial.print("err: ");
+        Serial.println(err);
+        return;
+    }
+    delay(500);
+	err = read(rom, 0xff00, data_in, 4);
 	if ((uint8_t)err) {
 		Serial.print("err: ");
 		Serial.println(err);
