@@ -1,6 +1,6 @@
 import serial
 import time
-import sys
+import os
 
 from lib import *
 
@@ -18,5 +18,39 @@ if __name__ == "__main__":
 	ser.reset_output_buffer()
 	ser.reset_input_buffer()
 	
-	#upload(ser, 0, b"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Mauris non quam id ligula sollicitudin sagittis in in elit. Fusce enim magna, efficitur ac aliquet quis, sollicitudin vitae dui. Phasellus non mi congue, commodo massa non, tempus massa. Suspendisse ullamcorper pharetra tellus at tempus. Orci varius natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Pellentesque condimentum lectus eu laoreet vestibulum. Quisque placerat blandit imperdiet. Maecenas sapien sem, pharetra sed dui non, ultricies varius nisl. Fusce eu nisi sed est pharetra accumsan. Suspendisse nibh justo, luctus sed sodales sed, consectetur id dui. Donec dignissim felis a lectus bibendum iaculis. Sed aliquet cursus diam sit amet hendrerit. Fusce rhoncus eros felis, non volutpat nisl faucibus id. Fusce mollis lacinia pulvinar. Suspendisse scelerisque neque vel facilisis malesuada.")
-	print(download(ser, 0, 896))
+	# user io logic
+	io_type = None
+	address = None
+	size = None
+	file = None
+	while True:
+		try:
+			if io_type is None:
+				print(
+					"(0): download",
+					"(1): upload",
+					"(2): print",
+					sep="\n"
+				); io_type = int(input(": "))
+				if io_type > 2: io_type = None; continue
+			if address is None: address = int(input("address: "))
+			if io_type == 2:
+				if size is None: size = int(input("size: "))
+				break
+			if io_type:
+				path = input("input file path: ")
+				if not os.path.exists(path): continue
+			else:
+				if size is None: size = int(input("size: "))
+				path = input("output file path: ")
+			file = path
+			break
+		except KeyboardInterrupt: exit(0)
+		except: pass
+	
+	# ROM io logic
+	if io_type < 2:
+		with open(file, "rb" if io_type else "wb") as file:
+			if io_type: upload(ser, address, file.read(), True)
+			else: file.write(download(ser, address, size, True))
+	else: print(download(ser, address, size, True))

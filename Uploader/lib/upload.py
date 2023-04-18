@@ -3,7 +3,6 @@ import serial
 import struct
 import math
 import time
-import sys
 
 
 __all__ = [
@@ -12,6 +11,25 @@ __all__ = [
 	"download",
 	"download_payload"
 ]
+
+
+class Block_Data:  # used as unpack function return value
+	def __init__(self, block_type, address, misc, block_crc):
+		if type(block_type) != bytes: block_type = bytes([block_type])
+		self.block_type = block_type
+		self.address = address
+		self.misc = misc
+		self.block_crc = block_crc
+		self.data = b""
+		self.data_crc = None
+	
+	def add_data(self, data, data_crc):
+		self.data = data
+		self.data_crc = data_crc
+	
+	@property
+	def packable(self) -> tuple: return self.block_type, self.address, self.data
+
 
 crc_config = crc_lib.Configuration(
 	width=              32,
@@ -31,12 +49,10 @@ def pack_block(block_type: bytes, address: int, data: bytes = b"") -> bytes:
 	return packet_data
 
 
-def unpack_block(block: bytes) -> tuple:
-	header_type, address, misc, header_crc = struct.unpack("<BHBL", block[:8])
-	header_type = bytes([header_type])
-	if header_type == b"W":
-		return b"W", address, misc, header_crc, block[8:40], block[40:]
-	return b"R", address, misc, header_crc
+def unpack_block(block: bytes) -> Block_Data:
+	bdat = Block_Data(*struct.unpack("<BHBL", block[:8]))
+	if bdat.block_type == b"W": bdat.add_data(block[8:40], block[40:])
+	return bdat
 	
 
 def download_payload(address: int, size: int) -> list:
@@ -46,10 +62,11 @@ def download_payload(address: int, size: int) -> list:
 	return blocks
 
 
-def download(ser: serial.Serial, address: int, size: int) -> bytes:
-	payload = b""
-	fail_count = 0
-	for block in download_payload(address, size):
+def download(ser: serial.Serial, address: int, size: int, log: bool = False) -> bytes:
+	payload = b""; fail_count = 0
+	blocks = download_payload(address, size)
+	block_count = len(blocks)
+	for index, block in enumerate(blocks):
 		block_data = None
 		while not block_data:
 			ser.write(block)
@@ -58,11 +75,10 @@ def download(ser: serial.Serial, address: int, size: int) -> bytes:
 				time.sleep(0.05); fail_count += 1  # 2 sec max
 			if fail_count == 40: fail_count = 0; continue
 			block_data = unpack_block(ser.read(44))
-			repacked = unpack_block(pack_block(*block_data[:2], block_data[4]))
-			block_crc = repacked[3]
-			data_crc = repacked[5]
-			if block_data[3] == block_crc and block_data[5] == data_crc: break
-		payload += block_data[4]
+			repacked = unpack_block(pack_block(*block_data.packable))
+			if block_data.block_crc == repacked.block_crc and block_data.data_crc == repacked.data_crc: break
+		payload += block_data.data
+		print(f"download progress: {round(index / block_count * 100)}%", end="\r")
 	return payload
 
 
@@ -75,16 +91,19 @@ def upload_payload(address: int, data: bytes) -> list:
 	return blocks
 
 
-def upload(ser: serial.Serial, address: int, data: bytes):
+def upload(ser: serial.Serial, address: int, data: bytes, log: bool = False):
 	fail_count = 0
-	for block in upload_payload(address, data):
+	blocks = upload_payload(address, data)
+	block_count = len(blocks)
+	for index, block in enumerate(blocks):
 		block_data = None
 		while not block_data:
 			ser.write(block)
 			ser.flush()
 			while ser.in_waiting < 8 and fail_count < 20:
-				time.sleep(0.05); fail_count += 1  # 1 sec
+				time.sleep(0.05); fail_count += 1  # 1 sec max
 			if fail_count == 20: fail_count = 0; continue
 			block_data = unpack_block(ser.read(8))
-			block_crc = unpack_block(pack_block(*block_data[:2]))[3]
-			if block_data[3] == block_crc: break
+			repacked = unpack_block(pack_block(*block_data.packable))
+			if block_data.block_crc == repacked.block_crc: break
+		print(f"upload progress: {round(index / block_count * 100)}%", end="\r")
