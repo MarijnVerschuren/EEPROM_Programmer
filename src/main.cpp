@@ -2,23 +2,29 @@
 #include "main.hpp"
 
 
+#define TIMEOUT 250
+
+
 _24LC512IP_TypeDef* rom;
-uint8_t* data_out = new uint8_t[64]{
-		241, 180, 32, 79, 70, 162, 112, 128,
-		151, 99, 62, 165, 23, 101, 117, 163,
-		161, 140, 7, 185, 97, 186, 72, 66,
-		169, 225, 212, 41, 150, 77, 244, 19,
-		152, 167, 112, 125, 145, 86, 11, 196,
-		61, 104, 238, 118, 223, 163, 40, 146,
-		206, 39, 147, 209, 189, 223, 31, 30,
-		231, 167, 138, 120, 243, 98, 34, 12
-};
-uint8_t* data_in = new uint8_t[128]();
+__attribute__((packed)) struct {
+	uint8_t type;
+	uint16_t addr;
+	uint8_t ret;
+	uint32_t crc;
+} packet_header;
+CRC32 crc(0x04C11DB7, 0xFFFFFFFF, 0x00, false, false);
+uint8_t buffer[32];
+uint32_t buffer_crc;
+uint32_t rec_header_crc;
+uint32_t rec_buffer_crc;
+
 
 void setup() {
+	pinMode(LED_BUILTIN, OUTPUT);
+
 	Wire.begin();
 	Serial.begin(115200);
-	//Wire.setClock(400000);  // 2K pull-up resistors recommended
+	Wire.setClock(400000);  // 2K pull-up resistors recommended
 	rom = new_24LC512IP(ROM_I2C_BASE_ADDRESS, 20);
 
 	Serial.print("Wire response on 0x50: ");
@@ -26,6 +32,47 @@ void setup() {
 }
 
 void loop() {
+	while (Serial.available() < sizeof(packet_header));
+	Serial.readBytes((uint8_t*)&packet_header, sizeof(packet_header));
+	// check xor checksum of address
+	crc.restart();
+	crc.add((uint8_t*)&packet_header, sizeof(packet_header) - 4);
+	rec_header_crc = crc.getCRC();
+
+	if (packet_header.crc != rec_header_crc) { return; }
+
+	Serial.println("waadawda");
+	uint32_t start;
+	if (packet_header.type == 'R') {
+		packet_header.type = 'W';
+		packet_header.ret = rom_read_buffer(rom, packet_header.addr, buffer, 32);
+		crc.restart();
+		crc.add((uint8_t*)&packet_header, sizeof(packet_header) - 4);
+		packet_header.crc = crc.getCRC();
+		crc.restart();
+		crc.add(buffer, 32);
+		buffer_crc = crc.getCRC();
+		Serial.write(buffer, 32);
+		Serial.write((uint8_t*)&buffer_crc, 4);
+	} else if (packet_header.type == 'W') {
+		start = millis(); while (Serial.available() < 32) { if (millis() - start > TIMEOUT) { return; } }
+		Serial.readBytes(buffer, 32);
+		start = millis(); while (Serial.available() < 4) { if (millis() - start > TIMEOUT) { return; } }
+		Serial.readBytes((uint8_t*)&buffer_crc, 4);
+		crc.restart();
+		crc.add(buffer, 32);
+		rec_buffer_crc = crc.getCRC();
+		if (buffer_crc == rec_buffer_crc) {
+			packet_header.type = 'R';
+			packet_header.ret = rom_write_buffer(rom, packet_header.addr, buffer, 32, true);
+			crc.restart();
+			crc.add((uint8_t*)&packet_header, sizeof(packet_header) - 4);
+			packet_header.crc = crc.getCRC();
+			Serial.write((uint8_t*)&packet_header, sizeof(packet_header));  // return code is sent back
+		}
+
+	}
+
 	/*uint16_t r_addr = 0xFC0;
 	uint16_t w_addr = 0x1000;
 	Serial.print("write: ");
