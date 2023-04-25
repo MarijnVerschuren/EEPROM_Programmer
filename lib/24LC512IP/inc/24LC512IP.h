@@ -36,7 +36,7 @@
 #endif
 
 #define ROM_CAPACITY 0xffff
-#define ROM_PAGE_SIZE 128
+#define ROM_PAGE_SIZE 32
 #define ROM_I2C_BASE_ADDRESS 0x50
 
 #define MIN(x, y) (x) < (y) ? (x) : (y)
@@ -69,8 +69,14 @@ _24LC512IP_TypeDef* new_24LC512IP(I2C_HandleTypeDef* i2c_handle, uint8_t i2c_add
 _24LC512IP_TypeDef* new_24LC512IP(uint8_t i2c_addr, uint32_t timeout);
 #endif
 
-_24LC512IP_StatusTypeDef write(_24LC512IP_TypeDef* handle, uint16_t rom_addr, uint8_t* buffer, uint16_t size);
-_24LC512IP_StatusTypeDef read(_24LC512IP_TypeDef* handle, uint16_t rom_addr, uint8_t* buffer, uint16_t size);
+
+_24LC512IP_StatusTypeDef rom_write(_24LC512IP_TypeDef* handle, uint16_t rom_addr, uint8_t byte);
+_24LC512IP_StatusTypeDef rom_read(_24LC512IP_TypeDef* handle, uint16_t rom_addr, uint8_t* byte);
+_24LC512IP_StatusTypeDef i2c_stat(_24LC512IP_TypeDef* handle);
+_24LC512IP_StatusTypeDef rom_write_buffer(_24LC512IP_TypeDef* handle, uint16_t rom_addr, uint8_t* buffer, uint16_t size, bool check = false);
+_24LC512IP_StatusTypeDef rom_read_buffer(_24LC512IP_TypeDef* handle, uint16_t rom_addr, uint8_t* buffer, uint16_t size);
+_24LC512IP_StatusTypeDef rom_write_buffer_check(_24LC512IP_TypeDef* handle, uint16_t rom_addr, uint8_t* buffer, uint16_t size);
+
 
 
 #endif //MCU_24LC512IP_H

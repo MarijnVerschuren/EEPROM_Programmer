@@ -7,3 +7,4 @@
 
 #endif //MCU_MAIN_HPP
 #include "../lib/24LC512IP/inc/24LC512IP.h"
+#include "../lib/CRC/inc/crc32.h"
